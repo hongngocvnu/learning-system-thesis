@@ -38,6 +38,8 @@ The JSON object must have exactly these fields:
   "answer": "The correct option text",
   "explanation": "Explain why the correct answer is correct",
   "difficulty": "easy", // or "medium", or "hard"
+  "concept_weight": 1.0, // A number between 0.1 and 5.0 indicating the importance of this concept
+  "time_decay_factor": 0.1, // A number between 0.01 and 0.5 indicating how quickly performance decays
   "related_learning_objectives": [
     "${learningObjective}"
   ]
@@ -50,6 +52,8 @@ Constraints:
 - The question should match the academic level of an introductory CS course.
 - Your response must be ONLY the JSON object, with no additional text.
 - The answer must be the exact text of one of the options, not just a letter.
+- concept_weight should reflect the importance of the concept (higher = more important)
+- time_decay_factor should be a small number (0.01-0.5) indicating decay rate
 `
 
     let fullResponse = ''
@@ -112,6 +116,8 @@ Constraints:
       const mappedData = {
         ...data,
         difficulty: difficultyMap[data.difficulty.toLowerCase()] || '1',
+        concept_weight: parseFloat(data.concept_weight) || 1.0,
+        time_decay_factor: parseFloat(data.time_decay_factor) || 0.1,
         options: JSON.stringify(data.options) // for JSONB
       }
 

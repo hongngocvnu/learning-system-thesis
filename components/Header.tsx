@@ -14,12 +14,16 @@ export default function Header() {
       if (user) {
         const { data: userData } = await supabase
           .from('users')
-          .select('name, role')
-          .eq('id', user.id)
+          .select('id, name, role')
+          .eq('email', user.email)
           .single()
         if (userData) {
           setUserName(userData.name)
           setUserRole(userData.role)
+          // Store user ID in session storage if not already present
+          if (!sessionStorage.getItem('userId')) {
+            sessionStorage.setItem('userId', userData.id.toString())
+          }
         }
       }
     }
@@ -28,6 +32,7 @@ export default function Header() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    sessionStorage.removeItem('userId')
     router.push('/login')
   }
 

@@ -2,18 +2,19 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/router'
 import Header from '../components/Header'
+import { v4 as uuidv4 } from 'uuid'
 
 interface Course {
-  id: string
+  id: number
   name: string
   code: string
   description: string
 }
 
 interface Enrollment {
-  id: string
-  course_id: string
-  student_id: string
+  id: number
+  course_id: number
+  student_id: number
   enrolled_at: string
 }
 
@@ -31,6 +32,22 @@ export default function StudentDashboard() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
           console.error('No user found')
+          return
+        }
+
+        // Get user_id from users table
+        const { data: userData, error: userDataError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', user.email)
+          .single()
+
+        if (userDataError) {
+          console.error('Error getting user data:', userDataError)
+          return
+        }
+        if (!userData) {
+          console.error('User not found in database')
           return
         }
 
@@ -52,7 +69,7 @@ export default function StudentDashboard() {
         const { data: enrollmentsData, error: enrollmentsError } = await supabase
           .from('enrollments')
           .select('course_id')
-          .eq('student_id', user.id)
+          .eq('student_id', userData.id)
 
         if (enrollmentsError) {
           console.error('Error fetching enrollments:', enrollmentsError)
@@ -65,6 +82,10 @@ export default function StudentDashboard() {
             enrolledCourseIds.includes(course.id)
           ) as Course[]
           setEnrolledCourses(enrolledCourses)
+          // Update available courses to exclude enrolled ones
+          setAvailableCourses(coursesData.filter(course => 
+            !enrolledCourseIds.includes(course.id)
+          ) as Course[])
         }
       } catch (error) {
         console.error('Error in fetchData:', error)
@@ -76,34 +97,134 @@ export default function StudentDashboard() {
     fetchData()
   }, [])
 
-  const handleEnroll = async (courseId: string) => {
+  const handleEnroll = async (courseId: number) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        console.error('Error getting user:', userError)
+        alert('Error: Please log in again')
+        return
+      }
       if (!user) {
         console.error('No user found')
+        alert('Error: Please log in again')
         return
       }
 
-      const { error } = await supabase
+      // Get user_id from users table
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single()
+
+      if (userDataError) {
+        console.error('Error getting user data:', userDataError)
+        throw new Error('Failed to get user data')
+      }
+      if (!userData) {
+        throw new Error('User not found in database')
+      }
+
+      console.log('Attempting to enroll user:', userData.id, 'in course:', courseId)
+
+      // Check if already enrolled
+      const { data: existingEnrollment, error: checkError } = await supabase
+        .from('enrollments')
+        .select('*')
+        .eq('student_id', userData.id)
+        .eq('course_id', courseId)
+        .single()
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        console.error('Error checking existing enrollment:', checkError)
+        throw checkError
+      }
+
+      if (existingEnrollment) {
+        alert('You are already enrolled in this course')
+        return
+      }
+
+      // Create enrollment
+      const { error: enrollError } = await supabase
         .from('enrollments')
         .insert({
-          course_id: courseId,
-          student_id: user.id,
-          enrolled_at: new Date().toISOString()
+          student_id: userData.id,
+          course_id: courseId
         })
 
-      if (error) {
-        console.error('Error enrolling in course:', error)
-        return
+      if (enrollError) {
+        console.error('Error enrolling in course:', enrollError)
+        throw enrollError
       }
 
-      // Refresh enrolled courses
+      // Update UI
       const enrolledCourse = availableCourses.find(course => course.id === courseId)
       if (enrolledCourse) {
         setEnrolledCourses([...enrolledCourses, enrolledCourse])
+        setAvailableCourses(availableCourses.filter(course => course.id !== courseId))
+        alert('Successfully enrolled in the course!')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in handleEnroll:', error)
+      alert(`Error enrolling in course: ${error.message}`)
+    }
+  }
+
+  const handleLeaveCourse = async (courseId: number) => {
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        console.error('Error getting user:', userError)
+        alert('Error: Please log in again')
+        return
+      }
+      if (!user) {
+        console.error('No user found')
+        alert('Error: Please log in again')
+        return
+      }
+
+      // Get user_id from users table
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single()
+
+      if (userDataError) {
+        console.error('Error getting user data:', userDataError)
+        throw new Error('Failed to get user data')
+      }
+      if (!userData) {
+        throw new Error('User not found in database')
+      }
+
+      // Delete enrollment
+      const { error: deleteError } = await supabase
+        .from('enrollments')
+        .delete()
+        .eq('student_id', userData.id)
+        .eq('course_id', courseId)
+
+      if (deleteError) {
+        console.error('Error leaving course:', deleteError)
+        throw deleteError
+      }
+
+      // Update UI
+      const leftCourse = enrolledCourses.find(course => course.id === courseId)
+      if (leftCourse) {
+        setEnrolledCourses(enrolledCourses.filter(course => course.id !== courseId))
+        setAvailableCourses([...availableCourses, leftCourse])
+        alert('Successfully left the course!')
+      }
+    } catch (error: any) {
+      console.error('Error in handleLeaveCourse:', error)
+      alert(`Error leaving course: ${error.message}`)
     }
   }
 
@@ -132,13 +253,26 @@ export default function StudentDashboard() {
               {enrolledCourses.map(course => (
                 <div 
                   key={course.id}
-                  className="bg-white shadow rounded-lg p-6 cursor-pointer hover:shadow-md transition-shadow duration-200"
-                  onClick={() => router.push(`/student-course/${course.id}`)}
+                  className="bg-white shadow rounded-lg p-6"
                 >
                   <h3 className="text-lg font-semibold mb-2 text-[#0f2a4e]">
                     {course.code} - {course.name}
                   </h3>
-                  <p className="text-gray-600 text-sm">{course.description}</p>
+                  <p className="text-gray-600 text-sm mb-4">{course.description}</p>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => router.push(`/student-course/${course.id}`)}
+                      className="flex-1 bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-blue-800"
+                    >
+                      View Course
+                    </button>
+                    <button
+                      onClick={() => handleLeaveCourse(course.id)}
+                      className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    >
+                      Leave
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

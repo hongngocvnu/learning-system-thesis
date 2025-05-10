@@ -1,0 +1,1 @@
+export { AdaptiveAssessmentSystem } from '../lib/adaptive-assessment'; 

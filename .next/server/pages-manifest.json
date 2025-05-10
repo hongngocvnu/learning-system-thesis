@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/dashboard-lecturer": "pages/dashboard-lecturer.js",
-  "/lecturer-courses": "pages/lecturer-courses.js",
-  "/lecturer-questions": "pages/lecturer-questions.js"
+  "/dashboard-student": "pages/dashboard-student.js",
+  "/student-test/[courseId]": "pages/student-test/[courseId].js",
+  "/login": "pages/login.js",
+  "/student-course/[courseId]": "pages/student-course/[courseId].js"
 }

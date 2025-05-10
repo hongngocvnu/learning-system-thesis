@@ -7,47 +7,99 @@ import { useRouter } from 'next/router'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      setIsLoading(true)
+      setError('')
 
-    if (error) {
-      alert(error.message)
-      return
-    }
+      // Test Supabase connection first
+      const { data: testData, error: testError } = await supabase
+        .from('users')
+        .select('count')
+        .limit(1)
 
-    // Get user role from users table
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', data.user.id)
-      .single()
+      if (testError) {
+        console.error('Supabase connection test failed:', testError)
+        setError('Cannot connect to the server. Please check your internet connection.')
+        return
+      }
 
-    if (userError) {
-      alert('Error fetching user data')
-      return
-    }
+      // Attempt login
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    // Redirect based on role
-    if (userData.role === 'lecturer') {
-      router.push('/dashboard-lecturer')
-    } else if (userData.role === 'student') {
-      router.push('/dashboard-student')
-    } else {
-      alert('Unknown user role')
+      if (loginError) {
+        console.error('Login error:', loginError)
+        setError(loginError.message)
+        return
+      }
+
+      if (!data?.user) {
+        setError('Login failed. Please try again.')
+        return
+      }
+
+      // Get user role from users table using email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('email', data.user.email)
+        .single()
+
+      if (userError) {
+        console.error('Error fetching user data:', userError)
+        setError('Error fetching user data')
+        return
+      }
+
+      // Store user ID in session storage for later use
+      sessionStorage.setItem('userId', userData.id.toString())
+
+      // Redirect based on role
+      if (userData.role === 'lecturer') {
+        router.push('/dashboard-lecturer')
+      } else if (userData.role === 'student') {
+        router.push('/dashboard-student')
+      } else {
+        setError('Unknown user role')
+      }
+    } catch (error) {
+      console.error('Unexpected error during login:', error)
+      setError('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
     <div style={{ padding: 40 }}>
       <h2>Login</h2>
-      <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} /><br />
-      <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /><br />
-      <button onClick={handleLogin}>Login</button>
+      {error && <div style={{ color: 'red', marginBottom: 10 }}>{error}</div>}
+      <input 
+        placeholder="Email" 
+        value={email} 
+        onChange={(e) => setEmail(e.target.value)} 
+        disabled={isLoading}
+      /><br />
+      <input 
+        placeholder="Password" 
+        type="password" 
+        value={password} 
+        onChange={(e) => setPassword(e.target.value)} 
+        disabled={isLoading}
+      /><br />
+      <button 
+        onClick={handleLogin} 
+        disabled={isLoading}
+      >
+        {isLoading ? 'Logging in...' : 'Login'}
+      </button>
     </div>
   )
 }

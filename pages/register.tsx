@@ -3,7 +3,6 @@ import React from 'react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/router'
-import { v4 as uuidv4 } from 'uuid'
 
 export default function Register() {
   const [email, setEmail] = useState('')
@@ -29,7 +28,6 @@ export default function Register() {
       const { error: insertError } = await supabase
         .from('users')
         .insert({
-          id: user.id,
           name,
           email,
           role,
