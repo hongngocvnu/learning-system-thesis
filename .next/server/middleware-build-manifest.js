@@ -25,6 +25,11 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/dashboard-student.js"
     ],
+    "/lecturer-los": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/lecturer-los.js"
+    ],
     "/login": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
@@ -34,11 +39,6 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/student-course/[courseId].js"
-    ],
-    "/student-test/[courseId]": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/student-test/[courseId].js"
     ]
   },
   "ampFirstPages": []

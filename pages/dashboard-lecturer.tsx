@@ -25,9 +25,6 @@ export default function DashboardLecturer() {
             <Link href="/lecturer-questions" className="block text-[#0f2a4e] font-medium hover:bg-[#0f2a4e] hover:text-white px-4 py-2 rounded-lg transition-colors duration-200">
               Created Questions
             </Link>
-            <Link href="#" className="block text-[#0f2a4e] font-medium hover:bg-[#0f2a4e] hover:text-white px-4 py-2 rounded-lg transition-colors duration-200">
-              Analytics
-            </Link>
           </nav>
         </aside>
 
@@ -43,18 +40,14 @@ export default function DashboardLecturer() {
               <h3 className="text-lg font-semibold text-[#0f2a4e] mb-2">Course Chapters</h3>
               <p className="text-gray-600">Manage course chapters and content</p>
             </Link>
-            <div className="bg-white rounded-xl shadow p-4 hover:shadow-lg transition-shadow duration-200 border border-gray-100">
+            <Link href="/student-list" className="bg-white rounded-xl shadow p-4 hover:shadow-lg transition-shadow duration-200 border border-gray-100">
               <h3 className="text-lg font-semibold text-[#0f2a4e] mb-2">Student List</h3>
               <p className="text-gray-600">See enrolled students</p>
-            </div>
+            </Link>
             <Link href="/lecturer-questions" className="bg-white rounded-xl shadow p-4 hover:shadow-lg transition-shadow duration-200 border border-gray-100">
               <h3 className="text-lg font-semibold text-[#0f2a4e] mb-2">Created Questions</h3>
               <p className="text-gray-600">Manage your question bank</p>
             </Link>
-            <div className="bg-white rounded-xl shadow p-4 hover:shadow-lg transition-shadow duration-200 border border-gray-100">
-              <h3 className="text-lg font-semibold text-[#0f2a4e] mb-2">Analytics</h3>
-              <p className="text-gray-600">Check student performance</p>
-            </div>
           </div>
         </main>
       </div>

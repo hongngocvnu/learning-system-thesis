@@ -1,0 +1,62 @@
+{
+  "weak": {
+    "Thompson": {
+      "accuracy": 0.985,
+      "avg_questions": 17.468,
+      "f1_score": 0.9924433249370278,
+      "precision": 0.985
+    },
+    "HDoC": {
+      "accuracy": 0.968,
+      "avg_questions": 20.084,
+      "f1_score": 0.9837398373983739,
+      "precision": 0.9827411167512691
+    },
+    "Random": {
+      "accuracy": 0.933,
+      "avg_questions": 17.323,
+      "f1_score": 0.9653388515261252,
+      "precision": 0.933933933933934
+    }
+  },
+  "medium": {
+    "Thompson": {
+      "accuracy": 0.92,
+      "avg_questions": 18.753,
+      "f1_score": 0.9581151832460733,
+      "precision": 0.9214501510574018
+    },
+    "HDoC": {
+      "accuracy": 0.895,
+      "avg_questions": 25.281,
+      "f1_score": 0.9430276722734671,
+      "precision": 0.9394594594594594
+    },
+    "Random": {
+      "accuracy": 0.878,
+      "avg_questions": 17.511,
+      "f1_score": 0.9349680170575693,
+      "precision": 0.8796389167502507
+    }
+  },
+  "strong": {
+    "Thompson": {
+      "accuracy": 0.84,
+      "avg_questions": 28.249,
+      "f1_score": 0.8963730569948186,
+      "precision": 0.812206572769953
+    },
+    "HDoC": {
+      "accuracy": 0.893,
+      "avg_questions": 30.597,
+      "f1_score": 0.9212656364974245,
+      "precision": 0.9020172910662824
+    },
+    "Random": {
+      "accuracy": 0.722,
+      "avg_questions": 19.014,
+      "f1_score": 0.8260325406758448,
+      "precision": 0.7036247334754797
+    }
+  }
+}

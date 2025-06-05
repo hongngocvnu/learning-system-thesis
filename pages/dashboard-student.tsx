@@ -24,6 +24,7 @@ export default function StudentDashboard() {
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [showMenuId, setShowMenuId] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -259,19 +260,44 @@ export default function StudentDashboard() {
                     {course.code} - {course.name}
                   </h3>
                   <p className="text-gray-600 text-sm mb-4">{course.description}</p>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2 items-center">
                     <button
                       onClick={() => router.push(`/student-course/${course.id}`)}
                       className="flex-1 bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-blue-800"
                     >
-                      View Course
+                      View
                     </button>
                     <button
-                      onClick={() => handleLeaveCourse(course.id)}
-                      className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                      onClick={() => router.push(`/student-test/${course.id}`)}
+                      className="flex-1 bg-white text-[#0f2a4e] px-4 py-2 rounded border-2 border-[#0f2a4e] hover:bg-[#0f2a4e] hover:text-white"
                     >
-                      Leave
+                      Take Test
                     </button>
+                    <div className="relative">
+                      <button
+                        className="p-2 rounded-full hover:bg-gray-100"
+                        onClick={() => setShowMenuId(showMenuId === course.id ? null : course.id)}
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="19.5" cy="12" r="1.5" />
+                          <circle cx="4.5" cy="12" r="1.5" />
+                        </svg>
+                      </button>
+                      {showMenuId === course.id && (
+                        <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow z-10">
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+                            onClick={() => {
+                              handleLeaveCourse(course.id);
+                              setShowMenuId(null);
+                            }}
+                          >
+                            Leave
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

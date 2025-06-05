@@ -1,0 +1,13 @@
+HDoC Results:
+Accuracy: 0.876
+Avg Questions: 30.7
+F1 Score: 0.909
+Precision: 0.868
+---
+Running Random...
+Random Results:
+Accuracy: 0.711
+Avg Questions: 18.6
+F1 Score: 0.823
+Precision: 0.699
+

@@ -1,10 +1,11 @@
 // pages/lecturer-questions.js
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { v4 as uuidv4 } from 'uuid'
 import Header from '../components/Header'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import { GoogleGenerativeAI } from "@google/generative-ai"
+import { toast } from 'react-hot-toast'
 
 interface Question {
   id: number
@@ -72,8 +73,66 @@ interface QuestionForm {
   correctAnswerIndex: number
   selectedLos: number[]
   difficulty: number
-  concept_weight: number
-  time_decay_factor: number
+}
+
+const genAI = new GoogleGenerativeAI("AIzaSyBBGFndzvMpWH8dCGbAsJAqCuKogSCeI8A")
+
+// Add fetchQuestions function before the QuestionManager component
+const fetchQuestions = async (userId: string, loId: number) => {
+  try {
+    // Lấy ID số từ bảng users dựa vào email của user hiện tại
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) {
+      throw new Error('Không tìm thấy thông tin người dùng');
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', user.email)
+      .single();
+
+    if (userError || !userData) {
+      throw new Error('Không thể lấy thông tin người dùng');
+    }
+
+    const { data: questionsData, error: questionsError } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('created_by', userData.id) // Sử dụng ID số từ bảng users
+
+    if (questionsError) {
+      console.error('Error fetching questions:', questionsError)
+      return
+    }
+
+    if (questionsData) {
+      // Get all question-LO mappings for the selected LO
+      const { data: questionLOsData } = await supabase
+        .from('question_lo')
+        .select('*')
+        .eq('lo_id', loId)
+
+      // Get choices for all questions
+      const { data: choicesData } = await supabase
+        .from('choices')
+        .select('*')
+        .in('question_id', questionsData.map(q => q.id))
+
+      // Filter questions to only show those mapped to the selected LO
+      const filteredQuestions = questionsData
+        .filter(question => questionLOsData?.some(qlo => qlo.question_id === question.id))
+        .map(question => ({
+          ...question,
+          choices: choicesData?.filter(c => c.question_id === question.id) || []
+        }))
+
+      return { questions: filteredQuestions, questionLOs: questionLOsData || [] }
+    }
+  } catch (error) {
+    console.error('Error in fetchQuestions:', error)
+    throw error
+  }
 }
 
 export default function QuestionManager() {
@@ -91,9 +150,7 @@ export default function QuestionManager() {
     options: ['', ''],
     correctAnswerIndex: 0,
     selectedLos: [],
-    difficulty: 1.0,
-    concept_weight: 1.0,
-    time_decay_factor: 0.1
+    difficulty: 1.0
   })
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -102,6 +159,7 @@ export default function QuestionManager() {
   const [currentPage, setCurrentPage] = useState(1)
   const questionsPerPage = 5
   const router = useRouter()
+  const [showAddPopup, setShowAddPopup] = useState(false)
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -232,121 +290,25 @@ export default function QuestionManager() {
 
   // Fetch questions when learning objective is selected
   useEffect(() => {
-    const fetchQuestions = async () => {
-      if (!selectedChapter || !currentUserId) return;
+    const loadQuestions = async () => {
+      if (!selectedLO || !currentUserId) return
 
       try {
         setIsLoading(true)
-        console.log('Fetching questions for chapter:', selectedChapter)
-
-        // Fetch all learning objectives for the selected chapter
-        const { data: losData, error: losError } = await supabase
-          .from('learning_objectives')
-          .select('*')
-          .eq('chapter_id', selectedChapter)
-
-        if (losError) {
-          console.error('Error fetching learning objectives:', losError)
-          return
+        const result = await fetchQuestions(currentUserId, selectedLO)
+        if (result) {
+          setQuestions(result.questions)
+          setQuestionLOs(result.questionLOs)
         }
-
-        if (!losData || losData.length === 0) {
-          console.log('No learning objectives found for chapter:', selectedChapter)
-          setQuestions([])
-          return
-        }
-
-        console.log('Learning objectives found:', losData.length)
-
-        // Fetch question-LO mappings
-        const { data: questionLosData, error: qlosError } = await supabase
-          .from('question_lo')
-          .select('*')
-          .in('lo_id', losData.map(lo => lo.id))
-
-        if (qlosError) {
-          console.error('Error fetching question-LO mappings:', qlosError)
-          return
-        }
-
-        if (!questionLosData || questionLosData.length === 0) {
-          console.log('No question mappings found for LOs:', losData.map(lo => lo.id))
-          setQuestions([])
-          return
-        }
-
-        console.log('Question-LO mappings found:', questionLosData.length)
-
-        // Fetch questions
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('questions')
-          .select('*')
-          .eq('created_by', currentUserId)
-
-        if (questionsError) {
-          console.error('Error fetching questions:', questionsError)
-          return
-        }
-
-        console.log('Questions found:', questionsData?.length || 0)
-        console.log('Questions data:', questionsData)
-
-        if (!questionsData || questionsData.length === 0) {
-          console.error('No questions found for user:', currentUserId)
-          return
-        }
-
-        // Fetch choices
-        const { data: choicesData, error: choicesError } = await supabase
-          .from('choices')
-          .select('*')
-          .in('question_id', questionsData.map(q => q.id))
-
-        if (choicesError) {
-          console.error('Error fetching choices:', choicesError)
-          return
-        }
-
-        console.log('Choices found:', choicesData?.length || 0)
-        console.log('Choices data:', choicesData)
-
-        if (!choicesData || choicesData.length === 0) {
-          console.error('No choices found for questions:', questionsData.map(q => q.id))
-          return
-        }
-
-        // Map questions with their choices and learning objectives
-        const mappedQuestions = questionsData.map(question => {
-          const questionChoices = choicesData.filter(c => c.question_id === question.id)
-          const questionLOs = questionLosData
-            .filter(qlo => qlo.question_id === question.id)
-            .map(qlo => losData.find(lo => lo.id === qlo.lo_id))
-            .filter(Boolean)
-
-          console.log(`Question ${question.id}:`, {
-            choices: questionChoices.length,
-            learningObjectives: questionLOs.length,
-            learningObjectiveIds: questionLOs.map(lo => lo?.id)
-          })
-
-          return {
-            ...question,
-            choices: questionChoices,
-            learningObjectives: questionLOs
-          }
-        })
-
-        console.log('Mapped questions:', mappedQuestions.length)
-        setQuestions(mappedQuestions)
       } catch (error) {
-        console.error('Error in fetchQuestions:', error)
+        console.error('Error loading questions:', error)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchQuestions()
-  }, [selectedChapter, currentUserId])
+    loadQuestions()
+  }, [selectedLO, currentUserId])
 
   const handleAddChoice = () => {
     setForm(prev => ({
@@ -379,9 +341,7 @@ export default function QuestionManager() {
       selectedLos: questionLOs
         .filter(qlo => qlo.question_id === question.id)
         .map(qlo => qlo.lo_id),
-      difficulty: question.difficulty,
-      concept_weight: question.concept_weight,
-      time_decay_factor: question.time_decay_factor
+      difficulty: question.difficulty
     })
     setIsPopupOpen(true)
   }
@@ -446,67 +406,85 @@ export default function QuestionManager() {
     }
   }
 
-  const handleSubmit = async () => {
-    try {
-      setIsLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUserId) {
+      toast.error('Vui lòng đăng nhập lại để tạo câu hỏi.');
+      return;
+    }
 
-      if (!form.question_rich_text || form.options.length < 2) {
-        alert('Please fill in all required fields and add at least 2 options')
-        return
+    try {
+      // Lấy ID số từ bảng users dựa vào email của user hiện tại
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('Không tìm thấy thông tin người dùng');
       }
 
-      // First, create or update the question
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (userError || !userData) {
+        throw new Error('Không thể lấy thông tin người dùng');
+      }
+
+      // Lấy ID lớn nhất hiện tại từ bảng questions
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('questions')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (maxIdError && maxIdError.code !== 'PGRST116') { // PGRST116 là lỗi khi không tìm thấy bản ghi
+        console.error('Error getting max ID:', maxIdError);
+        throw new Error('Không thể lấy ID cho câu hỏi mới');
+      }
+
+      const nextId = (maxIdData?.id || 0) + 1;
+
       const questionData = {
+        id: nextId, // Thêm ID vào dữ liệu
         question_rich_text: form.question_rich_text,
         explanation: form.explanation,
-        difficulty: form.difficulty || 1.0,
-        concept_weight: form.concept_weight || 1.0,
-        time_decay_factor: form.time_decay_factor || 0.1,
-        created_by: currentUserId
+        difficulty: form.difficulty,
+        created_by: userData.id,
+        concept_weight: null,
+        time_decay_factor: null
+      };
+
+      console.log('Creating question with data:', questionData);
+
+      // Insert the question
+      const { error: insertError } = await supabase
+        .from('questions')
+        .insert([questionData]);
+
+      if (insertError) {
+        console.error('Error inserting question:', insertError);
+        throw new Error(`Không thể tạo câu hỏi: ${insertError.message}`);
       }
 
-      let questionId: number;
-      let questionError;
-      if (editingQuestionId) {
-        const { error } = await supabase
-          .from('questions')
-          .update(questionData)
-          .eq('id', editingQuestionId)
-        questionError = error;
-        questionId = editingQuestionId;
-      } else {
-        const { data, error } = await supabase
-          .from('questions')
-          .insert([questionData])
-          .select()
-        questionError = error;
-        if (data && data.length > 0) {
-          questionId = data[0].id;
-        } else {
-          throw new Error('Failed to create question: No ID returned')
-        }
-      }
-
-      if (questionError) {
-        console.error('Error saving question:', questionError)
-        throw new Error(`Failed to save question: ${questionError.message}`)
-      }
+      const questionId = nextId;
+      console.log('Successfully created question with ID:', questionId);
 
       // Delete existing choices if editing
       if (editingQuestionId) {
         const { error: deleteError } = await supabase
           .from('choices')
           .delete()
-          .eq('question_id', editingQuestionId)
+          .eq('question_id', questionId)
 
         if (deleteError) {
           console.error('Error deleting existing choices:', deleteError)
-          throw new Error(`Failed to delete existing choices: ${deleteError.message}`)
+          throw new Error(`Không thể xóa các lựa chọn cũ: ${deleteError.message}`)
         }
       }
 
       // Insert new choices
-      const choicesData = form.options.map((option, index) => ({
+      const choices = form.options.map((option, index) => ({
         question_id: questionId,
         choice: option,
         is_correct: index === form.correctAnswerIndex
@@ -514,119 +492,75 @@ export default function QuestionManager() {
 
       const { error: choicesError } = await supabase
         .from('choices')
-        .insert(choicesData)
+        .insert(choices)
 
       if (choicesError) {
         console.error('Error saving choices:', choicesError)
-        // If choices insertion fails, try to delete the question to maintain consistency
-        if (!editingQuestionId) {
-          await supabase
-            .from('questions')
-            .delete()
-            .eq('id', questionId)
-        }
-        throw new Error(`Failed to save choices: ${choicesError.message}`)
+        throw new Error(`Không thể lưu các lựa chọn: ${choicesError.message}`)
       }
 
-      // Update question-LO mappings
+      // Delete existing question-LO mappings if editing
       if (editingQuestionId) {
-        const { error: deleteMappingsError } = await supabase
+        const { error: deleteError } = await supabase
           .from('question_lo')
           .delete()
-          .eq('question_id', editingQuestionId)
+          .eq('question_id', questionId)
 
-        if (deleteMappingsError) {
-          console.error('Error deleting existing mappings:', deleteMappingsError)
-          throw new Error(`Failed to delete existing mappings: ${deleteMappingsError.message}`)
+        if (deleteError) {
+          console.error('Error deleting existing question-LO mappings:', deleteError)
+          throw new Error(`Không thể xóa liên kết LO cũ: ${deleteError.message}`)
         }
       }
 
-      const mappingsData = form.selectedLos.map(loId => ({
+      // Insert new question-LO mappings
+      const questionLOs = form.selectedLos.map(loId => ({
         question_id: questionId,
         lo_id: loId
       }))
 
-      const { error: mappingsError } = await supabase
+      const { error: questionLOError } = await supabase
         .from('question_lo')
-        .insert(mappingsData)
+        .insert(questionLOs)
 
-      if (mappingsError) {
-        console.error('Error saving mappings:', mappingsError)
-        // If mappings insertion fails, try to clean up
-        if (!editingQuestionId) {
-          await supabase
-            .from('questions')
-            .delete()
-            .eq('id', questionId)
-          await supabase
-            .from('choices')
-            .delete()
-            .eq('question_id', questionId)
-        }
-        throw new Error(`Failed to save mappings: ${mappingsError.message}`)
+      if (questionLOError) {
+        console.error('Error saving question-LO mappings:', questionLOError)
+        throw new Error(`Không thể lưu liên kết LO: ${questionLOError.message}`)
       }
 
       // Reset form and refresh questions
-      setForm({
-        question_rich_text: '',
-        explanation: '',
-        options: ['', ''],
-        correctAnswerIndex: 0,
-        selectedLos: [],
-        difficulty: 1.0,
-        concept_weight: 1.0,
-        time_decay_factor: 0.1
-      })
-      setEditingQuestionId(null)
-      setIsPopupOpen(false)
-
-      // Refresh questions list
-      if (selectedLO && currentUserId) {
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('questions')
-          .select('*')
-          .eq('created_by', currentUserId)
-
-        if (questionsError) {
-          console.error('Error fetching updated questions:', questionsError)
-        } else if (questionsData) {
-          // Get all question-LO mappings for the selected LO
-          const { data: questionLOsData } = await supabase
-            .from('question_lo')
-            .select('*')
-            .eq('lo_id', selectedLO)
-
-          // Get choices for all questions
-          const { data: choicesData } = await supabase
-            .from('choices')
-            .select('*')
-            .in('question_id', questionsData.map(q => q.id))
-
-          // Filter questions to only show those mapped to the selected LO
-          const filteredQuestions = questionsData
-            .filter(question => questionLOsData?.some(qlo => qlo.question_id === question.id))
-            .map(question => ({
-              ...question,
-              choices: choicesData?.filter(c => c.question_id === question.id) || []
-            }))
-
-          setQuestions(filteredQuestions)
-          setQuestionLOs(questionLOsData || [])
+      resetForm()
+      
+      // Fetch updated questions
+      if (selectedLO) {
+        const result = await fetchQuestions(currentUserId, selectedLO)
+        if (result) {
+          setQuestions(result.questions)
+          setQuestionLOs(result.questionLOs)
         }
       }
 
-      alert(`Question ${editingQuestionId ? 'updated' : 'added'} successfully!`)
-    } catch (error: any) {
-      console.error('Error in handleSubmit:', error)
-      alert(`An error occurred while saving the question: ${error.message}`)
-    } finally {
-      setIsLoading(false)
+      // Show success message and close popup
+      toast.success(editingQuestionId ? 'Cập nhật câu hỏi thành công!' : 'Tạo câu hỏi thành công!')
+      setShowAddPopup(false) // Close the popup
+      
+      // Log success message
+      console.log('Question saved successfully:', {
+        questionId: nextId,
+        isEdit: !!editingQuestionId,
+        courseId: selectedCourse,
+        chapterId: selectedChapter,
+        loIds: form.selectedLos
+      });
+
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
+      toast.error(error instanceof Error ? error.message : 'Không thể tạo câu hỏi');
     }
   }
 
   const generateQuestion = async () => {
     if (!selectedCourse || !selectedChapter || form.selectedLos.length === 0) {
-      alert('Please select a course, chapter, and at least one learning objective first')
+      toast.error('Please select a course, chapter, and at least one learning objective first')
       return
     }
 
@@ -642,60 +576,131 @@ export default function QuestionManager() {
         throw new Error('Could not find selected course, chapter, or learning objective details');
       }
 
-      const res = await fetch('/api/auto-generate-question', {
-        method: 'POST',
-        body: JSON.stringify({
-          course: selectedCourseData.name,
-          chapter: selectedChapterData.title,
-          learningObjective: selectedLOData.title,
-          difficulty: form.difficulty
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      // Construct the prompt for Gemini
+      const prompt = `Generate a multiple choice question for the following learning objective:
+Course: ${selectedCourseData.name}
+Chapter: ${selectedChapterData.title}
+Learning Objective: ${selectedLOData.title}
+Difficulty Level: ${form.difficulty === 1 ? 'Easy' : form.difficulty === 2 ? 'Medium' : 'Hard'}
 
-      const data = await res.json()
+Please provide the response in the following JSON format:
+{
+  "question": "The question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "answer": "The correct option text",
+  "explanation": "Explanation of why this is the correct answer"
+}
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate question')
+Make sure the question is clear, relevant to the learning objective, and appropriate for the specified difficulty level.`;
+
+      // Add retry mechanism
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 2000; // 2 seconds
+
+      while (retryCount < maxRetries) {
+        try {
+          // Generate content using the Gemini model
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const responseText = response.text();
+
+          if (!responseText) {
+            throw new Error('No response from Gemini API');
+          }
+
+          // Parse the JSON response from the text
+          let parsedResponse;
+          try {
+            // Clean the response text and find JSON content
+            const cleanedText = responseText.replace(/```json\s*|\s*```/g, '').trim();
+            
+            // Try to find JSON content within the response text
+            let jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+            
+            if (!jsonMatch) {
+              // If no JSON found, try parsing the entire cleaned text
+              jsonMatch = [cleanedText];
+            }
+            
+            // Clean up common JSON formatting issues
+            let jsonString = jsonMatch[0]
+              .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+              .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+              .replace(/[\u201C\u201D]/g, '"')  // Replace smart quotes with regular quotes
+              .replace(/[\u2018\u2019]/g, "'");  // Replace smart apostrophes
+            
+            parsedResponse = JSON.parse(jsonString);
+          } catch (error) {
+            console.error('Error parsing Gemini response:', error);
+            console.error('Response text:', responseText);
+            throw new Error('Failed to parse question data from response. Please try again or create the question manually.');
+          }
+
+          if (!parsedResponse.question || !parsedResponse.options || !parsedResponse.answer) {
+            throw new Error('Invalid question data format');
+          }
+
+          // Find the index of the correct answer in the options array
+          let answerIndex = parsedResponse.options.findIndex((option: string) => 
+            option.toLowerCase().trim() === parsedResponse.answer.toLowerCase().trim()
+          );
+
+          // If exact match fails, try partial matching
+          if (answerIndex === -1) {
+            answerIndex = parsedResponse.options.findIndex((option: string) => 
+              option.toLowerCase().includes(parsedResponse.answer.toLowerCase()) ||
+              parsedResponse.answer.toLowerCase().includes(option.toLowerCase())
+            );
+          }
+
+          // If still no match, default to first option and warn user
+          if (answerIndex === -1) {
+            console.warn('Could not match correct answer, defaulting to first option');
+            answerIndex = 0;
+          }
+          
+          // Update form with generated data
+          setForm({
+            ...form,
+            question_rich_text: parsedResponse.question,
+            options: parsedResponse.options,
+            correctAnswerIndex: answerIndex,
+            explanation: parsedResponse.explanation || '',
+            difficulty: form.difficulty
+          });
+
+          toast.success('Question generated successfully!');
+          return; // Success, exit the function
+
+        } catch (error: any) {
+          if (error.message.includes('503') && retryCount < maxRetries - 1) {
+            retryCount++;
+            toast.error(`Attempt ${retryCount} failed. Retrying in ${retryDelay/1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            continue;
+          }
+          throw error; // Re-throw if not a 503 error or max retries reached
+        }
       }
 
-      if (!data.question || !data.options || !data.answer) {
-        throw new Error('Invalid response format from the server')
-      }
-      
-      // Parse options if it's a string
-      const options = typeof data.options === 'string' ? JSON.parse(data.options) : data.options
-      
-      // Find the index of the correct answer in the options array
-      const answerIndex = options.findIndex((option: string) => option === data.answer)
-      const letterAnswer = answerIndex !== -1 ? String.fromCharCode(65 + answerIndex) : ''
-      
-      // Update form with generated data
-      setForm({
-        ...form,
-        question_rich_text: data.question,
-        options: options,
-        correctAnswerIndex: answerIndex,
-        explanation: data.explanation || '',
-        difficulty: form.difficulty,
-        concept_weight: data.concept_weight || 1.0,
-        time_decay_factor: data.time_decay_factor || 0.1
-      })
+      // If we get here, all retries failed
+      throw new Error('Failed to generate question after multiple attempts. Please try again later.');
+
     } catch (error) {
-      console.error('Error generating question:', error)
+      console.error('Error generating question:', error);
       if (error instanceof Error) {
-        if (error.message.includes('Ollama service')) {
-          alert('The question generation service is not running. Please contact your administrator.')
+        if (error.message.includes('503')) {
+          toast.error('The AI service is currently overloaded. Please try again in a few moments.');
         } else {
-          alert(error.message)
+          toast.error(error.message);
         }
       } else {
-        alert('Failed to generate question. Please try again.')
+        toast.error('Failed to generate question. Please try again.');
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
@@ -703,6 +708,19 @@ export default function QuestionManager() {
   useEffect(() => {
     setCurrentPage(1)
   }, [selectedChapter])
+
+  const resetForm = () => {
+    setForm({
+      question_rich_text: '',
+      explanation: '',
+      options: ['', ''],
+      correctAnswerIndex: 0,
+      selectedLos: [],
+      difficulty: 1.0
+    })
+    setEditingQuestionId(null)
+    setIsPopupOpen(false)
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -730,7 +748,7 @@ export default function QuestionManager() {
             Back to Dashboard
           </Link>
           <button
-            onClick={() => setIsPopupOpen(true)}
+            onClick={() => setShowAddPopup(true)}
             className="bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-blue-800"
           >
             Add New Question
@@ -906,267 +924,242 @@ export default function QuestionManager() {
           </div>
         </div>
 
-        {/* Add/Edit Question Popup */}
-        {isPopupOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center overflow-y-auto py-8">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-[#0f2a4e]">
-                  {editingQuestionId ? 'Edit Question' : 'Add New Question'}
-                </h2>
-                <div className="flex space-x-2">
-                  <select
-                    value={form.difficulty}
-                    onChange={(e) => setForm({ ...form, difficulty: parseFloat(e.target.value) })}
-                    className="border rounded px-3 py-2"
-                    disabled={isLoading}
-                  >
-                    <option value={1}>Easy</option>
-                    <option value={2}>Medium</option>
-                    <option value={3}>Hard</option>
-                  </select>
-                  <div className="flex items-center space-x-2">
-                    <label className="text-sm text-gray-600">Concept Weight:</label>
-                    <input
-                      type="number"
-                      min="0.1"
-                      max="5.0"
-                      step="0.1"
-                      value={form.concept_weight}
-                      onChange={(e) => setForm({ ...form, concept_weight: parseFloat(e.target.value) })}
-                      className="w-20 border rounded px-2 py-1"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <label className="text-sm text-gray-600">Time Decay:</label>
-                    <input
-                      type="number"
-                      min="0.01"
-                      max="0.5"
-                      step="0.01"
-                      value={form.time_decay_factor}
-                      onChange={(e) => setForm({ ...form, time_decay_factor: parseFloat(e.target.value) })}
-                      className="w-20 border rounded px-2 py-1"
-                      disabled={isLoading}
-                    />
-                  </div>
+        {/* Add New Question Popup */}
+        {showAddPopup && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowAddPopup(false)}></div>
+            <div className="relative min-h-screen flex items-center justify-center p-4">
+              <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full">
+                <div className="flex justify-between items-center p-6 border-b">
+                  <h3 className="text-xl font-semibold text-[#0f2a4e]">Add New Question</h3>
                   <button
-                    onClick={generateQuestion}
-                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
-                    disabled={isLoading || !selectedCourse || !selectedChapter || form.selectedLos.length === 0}
+                    onClick={() => setShowAddPopup(false)}
+                    className="text-gray-400 hover:text-gray-500"
                   >
-                    Auto Generate
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsPopupOpen(false)
-                      setEditingQuestionId(null)
-                      setForm({
-                        question_rich_text: '',
-                        explanation: '',
-                        options: ['', ''],
-                        correctAnswerIndex: 0,
-                        selectedLos: [],
-                        difficulty: 1.0,
-                        concept_weight: 1.0,
-                        time_decay_factor: 0.1
-                      })
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Course *
-                  </label>
-                  <select
-                    className="w-full border rounded px-3 py-2"
-                    value={selectedCourse}
-                    onChange={(e) => {
-                      console.log('Selected course:', e.target.value)
-                      setSelectedCourse(e.target.value ? Number(e.target.value) : '')
-                      setSelectedChapter('')
-                      setSelectedLO('')
-                    }}
-                    disabled={isLoading}
-                  >
-                    <option value="">Select a course</option>
-                    {courses.map(course => (
-                      <option key={course.id} value={course.id}>
-                        {course.code} - {course.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedCourse && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Chapter *
-                    </label>
-                    <select
-                      className="w-full border rounded px-3 py-2"
-                      value={selectedChapter}
-                      onChange={(e) => {
-                        setSelectedChapter(e.target.value ? Number(e.target.value) : '')
-                        setSelectedLO('')
-                      }}
-                      disabled={isLoading}
-                    >
-                      <option value="">Select a chapter</option>
-                      {chapters.map(chapter => (
-                        <option key={chapter.id} value={chapter.id}>
-                          Chapter {chapter.order_num}: {chapter.title}
-                        </option>
-                      ))}
-                    </select>
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold text-[#0f2a4e]">
+                      {editingQuestionId ? 'Edit Question' : 'Add New Question'}
+                    </h2>
+                    <div className="flex space-x-2">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm text-gray-600">Difficulty:</label>
+                        <select
+                          value={form.difficulty}
+                          onChange={(e) => setForm({ ...form, difficulty: Number(e.target.value) })}
+                          className="border rounded px-2 py-1"
+                          disabled={isLoading}
+                        >
+                          <option value={1}>Easy</option>
+                          <option value={2}>Medium</option>
+                          <option value={3}>Hard</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={generateQuestion}
+                        className="bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-[#0f2a4e] disabled:opacity-50"
+                        disabled={isLoading || !selectedCourse || !selectedChapter || form.selectedLos.length === 0}
+                      >
+                        Auto Generate
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddPopup(false)
+                          setEditingQuestionId(null)
+                          resetForm()
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        {/* <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg> */}
+                      </button>
+                    </div>
                   </div>
-                )}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Course *
+                      </label>
+                      <select
+                        className="w-full border rounded px-3 py-2"
+                        value={selectedCourse}
+                        onChange={(e) => {
+                          console.log('Selected course:', e.target.value)
+                          setSelectedCourse(e.target.value ? Number(e.target.value) : '')
+                          setSelectedChapter('')
+                          setSelectedLO('')
+                        }}
+                        disabled={isLoading}
+                      >
+                        <option value="">Select a course</option>
+                        {courses.map(course => (
+                          <option key={course.id} value={course.id}>
+                            {course.code} - {course.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                {selectedChapter && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Learning Objectives *
-                    </label>
-                    <div className="border rounded p-2 max-h-60 overflow-y-auto">
-                      {learningObjectives.map(lo => (
-                        <div key={lo.id} className="flex items-center space-x-2 p-1 hover:bg-gray-50">
+                    {selectedCourse && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Chapter *
+                        </label>
+                        <select
+                          className="w-full border rounded px-3 py-2"
+                          value={selectedChapter}
+                          onChange={(e) => {
+                            setSelectedChapter(e.target.value ? Number(e.target.value) : '')
+                            setSelectedLO('')
+                          }}
+                          disabled={isLoading}
+                        >
+                          <option value="">Select a chapter</option>
+                          {chapters.map(chapter => (
+                            <option key={chapter.id} value={chapter.id}>
+                              Chapter {chapter.order_num}: {chapter.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {selectedChapter && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Learning Objectives *
+                        </label>
+                        <div className="border rounded p-2 max-h-60 overflow-y-auto">
+                          {learningObjectives.map(lo => (
+                            <div key={lo.id} className="flex items-center space-x-2 p-1 hover:bg-gray-50">
+                              <input
+                                type="checkbox"
+                                id={`lo-${lo.id}`}
+                                checked={form.selectedLos.includes(lo.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setForm({
+                                      ...form,
+                                      selectedLos: [...form.selectedLos, lo.id]
+                                    })
+                                  } else {
+                                    setForm({
+                                      ...form,
+                                      selectedLos: form.selectedLos.filter(id => id !== lo.id)
+                                    })
+                                  }
+                                }}
+                                className="h-4 w-4"
+                                disabled={isLoading}
+                              />
+                              <label htmlFor={`lo-${lo.id}`} className="text-sm cursor-pointer">
+                                {lo.lo_code} - {lo.title}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        {form.selectedLos.length === 0 && (
+                          <p className="text-sm text-red-500 mt-1">
+                            Please select at least one learning objective
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Question Content *
+                      </label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2"
+                        value={form.question_rich_text}
+                        onChange={(e) => setForm({ ...form, question_rich_text: e.target.value })}
+                        rows={3}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Explanation
+                      </label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2"
+                        value={form.explanation}
+                        onChange={(e) => setForm({ ...form, explanation: e.target.value })}
+                        rows={3}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Options *
+                      </label>
+                      {form.options.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-2">
                           <input
-                            type="checkbox"
-                            id={`lo-${lo.id}`}
-                            checked={form.selectedLos.includes(lo.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setForm({
-                                  ...form,
-                                  selectedLos: [...form.selectedLos, lo.id]
-                                })
-                              } else {
-                                setForm({
-                                  ...form,
-                                  selectedLos: form.selectedLos.filter(id => id !== lo.id)
-                                })
-                              }
-                            }}
+                            type="radio"
+                            name="correctAnswer"
+                            checked={form.correctAnswerIndex === index}
+                            onChange={() => setForm({ ...form, correctAnswerIndex: index })}
                             className="h-4 w-4"
                             disabled={isLoading}
                           />
-                          <label htmlFor={`lo-${lo.id}`} className="text-sm cursor-pointer">
-                            {lo.lo_code} - {lo.title}
-                          </label>
+                          <input
+                            type="text"
+                            value={option}
+                            onChange={(e) => handleOptionChange(index, e.target.value)}
+                            className="flex-1 border rounded px-3 py-2"
+                            placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                            disabled={isLoading}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveChoice(index)}
+                            className="text-red-600 hover:text-red-800"
+                            disabled={isLoading}
+                          >
+                            Remove
+                          </button>
                         </div>
                       ))}
-                    </div>
-                    {form.selectedLos.length === 0 && (
-                      <p className="text-sm text-red-500 mt-1">
-                        Please select at least one learning objective
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Question Content *
-                  </label>
-                  <textarea
-                    className="w-full border rounded px-3 py-2"
-                    value={form.question_rich_text}
-                    onChange={(e) => setForm({ ...form, question_rich_text: e.target.value })}
-                    rows={3}
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Explanation
-                  </label>
-                  <textarea
-                    className="w-full border rounded px-3 py-2"
-                    value={form.explanation}
-                    onChange={(e) => setForm({ ...form, explanation: e.target.value })}
-                    rows={3}
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Options *
-                  </label>
-                  {form.options.map((option, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="correctAnswer"
-                        checked={form.correctAnswerIndex === index}
-                        onChange={() => setForm({ ...form, correctAnswerIndex: index })}
-                        className="h-4 w-4"
-                        disabled={isLoading}
-                      />
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(e) => handleOptionChange(index, e.target.value)}
-                        className="flex-1 border rounded px-3 py-2"
-                        placeholder={`Option ${String.fromCharCode(65 + index)}`}
-                        disabled={isLoading}
-                      />
                       <button
                         type="button"
-                        onClick={() => handleRemoveChoice(index)}
-                        className="text-red-600 hover:text-red-800"
+                        onClick={handleAddChoice}
+                        className="text-blue-600 hover:text-blue-800"
                         disabled={isLoading}
                       >
-                        Remove
+                        Add Option
                       </button>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleAddChoice}
-                    className="text-blue-600 hover:text-blue-800"
-                    disabled={isLoading}
-                  >
-                    Add Option
-                  </button>
-                </div>
 
-                <div className="flex justify-end space-x-2">
-                  <button
-                    onClick={() => {
-                      setIsPopupOpen(false)
-                      setEditingQuestionId(null)
-                      setForm({
-                        question_rich_text: '',
-                        explanation: '',
-                        options: ['', ''],
-                        correctAnswerIndex: 0,
-                        selectedLos: [],
-                        difficulty: 1.0,
-                        concept_weight: 1.0,
-                        time_decay_factor: 0.1
-                      })
-                    }}
-                    className="px-4 py-2 border rounded hover:bg-gray-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    className="bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-blue-800 disabled:opacity-50"
-                    disabled={isLoading}
-                  >
-                    {editingQuestionId ? 'Update Question' : 'Add Question'}
-                  </button>
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => {
+                          setShowAddPopup(false)
+                          setEditingQuestionId(null)
+                          resetForm()
+                        }}
+                        className="px-4 py-2 border rounded hover:bg-gray-100"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSubmit}
+                        className="bg-[#0f2a4e] text-white px-4 py-2 rounded hover:bg-blue-800 disabled:opacity-50"
+                        disabled={isLoading}
+                      >
+                        {editingQuestionId ? 'Update Question' : 'Add Question'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

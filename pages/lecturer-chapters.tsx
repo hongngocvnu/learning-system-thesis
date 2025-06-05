@@ -134,28 +134,52 @@ export default function LecturerChapters() {
           created_by: parseInt(userId)
         }
 
-        const { data, error } = await supabase
-          .from('chapters')
-          .insert([newChapter])
-          .select()
+        console.log('Attempting to create chapter with data:', JSON.stringify(newChapter, null, 2))
 
-        if (error) {
-          console.error('Error creating chapter:', error)
-          alert(`Error creating chapter: ${error.message}`)
-          return
+        try {
+          // Insert chapter without select first
+          const { error: insertError } = await supabase
+            .from('chapters')
+            .insert([newChapter])
+
+          if (insertError) {
+            console.error('Error inserting chapter:', insertError)
+            throw insertError
+          }
+
+          // Then fetch the latest chapter for this course
+          const { data: chapterData, error: fetchError } = await supabase
+            .from('chapters')
+            .select('*')
+            .eq('course_id', selectedCourse)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+          if (fetchError) {
+            console.error('Error fetching created chapter:', fetchError)
+            throw fetchError
+          }
+
+          if (!chapterData) {
+            console.error('Could not fetch created chapter')
+            throw new Error('Failed to fetch created chapter')
+          }
+
+          console.log('Chapter created and fetched successfully:', chapterData)
+          // Update chapters list with the new chapter data
+          setChapters(prevChapters => [chapterData, ...prevChapters])
+          alert('Chapter created successfully!')
+          resetForm()
+        } catch (error: any) {
+          console.error('Error in handleSubmit:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          })
+          alert(`An unexpected error occurred: ${error.message}`)
         }
-
-        if (!data || data.length === 0) {
-          console.error('No data returned after chapter creation')
-          alert('Error: Chapter was not created successfully')
-          return
-        }
-
-        setChapters([...chapters, data[0]])
-        alert('Chapter created successfully!')
       }
-
-      resetForm()
     } catch (error: any) {
       console.error('Error in handleSubmit:', error)
       alert(`An unexpected error occurred: ${error.message}`)
@@ -194,6 +218,26 @@ export default function LecturerChapters() {
     <div className="bg-gray-50 min-h-screen">
       <Header />
       <div className="p-6">
+        <div className="mb-6">
+          <Link 
+            href="/dashboard-lecturer" 
+            className="text-[#0f2a4e] hover:text-blue-800 flex items-center"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5 mr-2" 
+              viewBox="0 0 20 20" 
+              fill="currentColor"
+            >
+              <path 
+                fillRule="evenodd" 
+                d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" 
+                clipRule="evenodd" 
+              />
+            </svg>
+            Back to Dashboard
+          </Link>
+        </div>
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-[#0f2a4e]">Manage Chapters</h1>
           <button

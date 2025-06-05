@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Header from '../components/Header'
+import { useRouter } from 'next/router'
+import Link from 'next/link'
 
 interface Course {
   id: number
@@ -20,6 +22,12 @@ interface Chapter {
   created_at: string
 }
 
+interface Student {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export default function LecturerCourses() {
   const [courses, setCourses] = useState<Course[]>([])
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -29,6 +37,9 @@ export default function LecturerCourses() {
   const [showForm, setShowForm] = useState(false)
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<number | null>(null)
+  const [students, setStudents] = useState<Student[]>([])
+  const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null)
+  const router = useRouter();
 
   useEffect(() => {
     fetchCourses()
@@ -90,15 +101,41 @@ export default function LecturerCourses() {
     }
   }
 
+  const fetchStudents = async (courseId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('enrollments')
+        .select('student_id, users:student_id(name, email)')
+        .eq('course_id', courseId);
+      if (error) {
+        console.error('Error fetching students:', error);
+        return;
+      }
+      const studentList = data.map((item: any) => ({
+        id: item.student_id,
+        name: item.users.name,
+        email: item.users.email
+      }));
+      setStudents(studentList);
+    } catch (error) {
+      console.error('Error in fetchStudents:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       const userId = sessionStorage.getItem('userId')
+      console.log('Current userId from sessionStorage:', userId, typeof userId)
+      
       if (!userId) {
+        console.error('No userId found in sessionStorage')
         alert('Error: User ID not found')
         return
       }
 
+      console.log('Form data:', JSON.stringify(form, null, 2))
       if (!form.name || !form.code) {
+        console.error('Missing required fields:', { name: form.name, code: form.code })
         alert('Please fill in all required fields')
         return
       }
@@ -129,34 +166,63 @@ export default function LecturerCourses() {
         const newCourse = {
           name: form.name,
           code: form.code,
-          description: form.description,
+          description: form.description || '',
           lecturer_id: parseInt(userId)
         }
+        console.log('Attempting to create course with data:', JSON.stringify(newCourse, null, 2))
 
-        const { data, error } = await supabase
-          .from('courses')
-          .insert([newCourse])
-          .select()
+        try {
+          console.log('Sending request to Supabase...')
+          
+          // Insert course without select first
+          const { error: insertError } = await supabase
+            .from('courses')
+            .insert([newCourse])
 
-        if (error) {
-          console.error('Error creating course:', error)
-          alert(`Error creating course: ${error.message}`)
-          return
+          if (insertError) {
+            console.error('Error inserting course:', insertError)
+            throw insertError
+          }
+
+          // Then fetch the latest course for this lecturer
+          const { data: courseData, error: fetchError } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('lecturer_id', parseInt(userId))
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+          if (fetchError) {
+            console.error('Error fetching created course:', fetchError)
+            throw fetchError
+          }
+
+          if (!courseData) {
+            console.error('Could not fetch created course')
+            throw new Error('Failed to fetch created course')
+          }
+
+          console.log('Course created and fetched successfully:', courseData)
+          setCourses(prevCourses => [courseData, ...prevCourses])
+          alert('Course created successfully!')
+        } catch (supabaseError: any) {
+          console.error('Supabase operation failed:', {
+            message: supabaseError.message,
+            stack: supabaseError.stack,
+            name: supabaseError.name
+          })
+          throw supabaseError
         }
-
-        if (!data || data.length === 0) {
-          console.error('No data returned after course creation')
-          alert('Error: Course was not created successfully')
-          return
-        }
-
-        setCourses([...courses, data[0]])
-        alert('Course created successfully!')
       }
 
       resetForm()
     } catch (error: any) {
-      console.error('Error in handleSubmit:', error)
+      console.error('Error in handleSubmit:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
       alert(`An unexpected error occurred: ${error.message}`)
     }
   }
@@ -181,26 +247,51 @@ export default function LecturerCourses() {
         created_by: parseInt(userId)
       }
 
-      const { data, error } = await supabase
-        .from('chapters')
-        .insert([newChapter])
-        .select()
+      console.log('Attempting to create chapter with data:', JSON.stringify(newChapter, null, 2))
 
-      if (error) {
-        console.error('Error creating chapter:', error)
-        alert(`Error creating chapter: ${error.message}`)
-        return
+      try {
+        // Insert chapter without select first
+        const { error: insertError } = await supabase
+          .from('chapters')
+          .insert([newChapter])
+
+        if (insertError) {
+          console.error('Error inserting chapter:', insertError)
+          throw insertError
+        }
+
+        // Then fetch the latest chapter for this course
+        const { data: chapterData, error: fetchError } = await supabase
+          .from('chapters')
+          .select('*')
+          .eq('course_id', chapterForm.course_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (fetchError) {
+          console.error('Error fetching created chapter:', fetchError)
+          throw fetchError
+        }
+
+        if (!chapterData) {
+          console.error('Could not fetch created chapter')
+          throw new Error('Failed to fetch created chapter')
+        }
+
+        console.log('Chapter created and fetched successfully:', chapterData)
+        // Update chapters list with the new chapter data
+        setChapters(prevChapters => [chapterData, ...prevChapters])
+        alert('Chapter created successfully!')
+        resetChapterForm()
+      } catch (error: any) {
+        console.error('Error in handleChapterSubmit:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        })
+        alert(`An unexpected error occurred: ${error.message}`)
       }
-
-      if (!data || data.length === 0) {
-        console.error('No data returned after chapter creation')
-        alert('Error: Chapter was not created successfully')
-        return
-      }
-
-      setChapters([...chapters, data[0]])
-      alert('Chapter created successfully!')
-      resetChapterForm()
     } catch (error: any) {
       console.error('Error in handleChapterSubmit:', error)
       alert(`An unexpected error occurred: ${error.message}`)
@@ -245,12 +336,32 @@ export default function LecturerCourses() {
     <div className="bg-gray-50 min-h-screen">
       <Header />
       <div className="p-6">
+        <div className="mb-6">
+          <Link 
+            href="/dashboard-lecturer" 
+            className="text-[#0f2a4e] hover:text-blue-800 flex items-center"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5 mr-2" 
+              viewBox="0 0 20 20" 
+              fill="currentColor"
+            >
+              <path 
+                fillRule="evenodd" 
+                d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" 
+                clipRule="evenodd" 
+              />
+            </svg>
+            Back to Dashboard
+          </Link>
+        </div>
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-[#0f2a4e]">Manage Courses</h1>
           <div className="space-x-4">
             <button
               onClick={() => setShowChapterForm(true)}
-              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              className="bg-white text-[#0f2a4e] px-4 py-2 rounded border-2 border-[#0f2a4e] hover:bg-[#0f2a4e] hover:text-white"
             >
               Add New Chapter
             </button>
@@ -407,16 +518,6 @@ export default function LecturerCourses() {
                   {course.description}
                 </p>
               )}
-              <div className="mt-4">
-                <h4 className="font-medium text-gray-700 mb-2">Chapters:</h4>
-                {chapters
-                  .filter(chapter => chapter.course_id === course.id)
-                  .map(chapter => (
-                    <div key={chapter.id} className="text-sm text-gray-600 mb-1">
-                      {chapter.order_num}. {chapter.title}
-                    </div>
-                  ))}
-              </div>
               <div className="flex space-x-2 mt-4">
                 <button
                   onClick={() => handleEdit(course)}
@@ -431,6 +532,41 @@ export default function LecturerCourses() {
                   Delete
                 </button>
               </div>
+              <button
+                onClick={() => {
+                  if (expandedCourseId === course.id) {
+                    setExpandedCourseId(null);
+                  } else {
+                    setExpandedCourseId(course.id);
+                    fetchStudents(course.id);
+                  }
+                }}
+                className="mt-2 text-[#0f2a4e] hover:text-blue-800"
+              >
+                {expandedCourseId === course.id ? 'Hide Students' : 'Show Students'}
+              </button>
+              {expandedCourseId === course.id && (
+                <div className="mt-4">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STT</th>
+                        <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên</th>
+                        <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {students.map((student, index) => (
+                        <tr key={student.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.email}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ))}
         </div>

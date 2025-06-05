@@ -2,8 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/dashboard-student": "pages/dashboard-student.js",
-  "/student-test/[courseId]": "pages/student-test/[courseId].js",
+  "/lecturer-los": "pages/lecturer-los.js",
   "/login": "pages/login.js",
-  "/student-course/[courseId]": "pages/student-course/[courseId].js"
+  "/student-course/[courseId]": "pages/student-course/[courseId].js",
+  "/dashboard-student": "pages/dashboard-student.js"
 }

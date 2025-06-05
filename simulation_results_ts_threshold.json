@@ -1,0 +1,162 @@
+{
+  "0.2": {
+    "Thompson": {
+      "accuracy": 0.881,
+      "avg_questions": 44.489,
+      "f1_score": 0.6468842729970327,
+      "precision": 0.4801762114537445
+    },
+    "HDoC": {
+      "accuracy": 0.875,
+      "avg_questions": 32,
+      "f1_score": 0,
+      "precision": 0
+    },
+    "Random": {
+      "accuracy": 0.869,
+      "avg_questions": 32,
+      "f1_score": 0,
+      "precision": 0
+    }
+  },
+  "0.3": {
+    "Thompson": {
+      "accuracy": 0.841,
+      "avg_questions": 43.772,
+      "f1_score": 0.7225130890052355,
+      "precision": 0.5655737704918032
+    },
+    "HDoC": {
+      "accuracy": 0.846,
+      "avg_questions": 46.276,
+      "f1_score": 0.4460431654676259,
+      "precision": 1
+    },
+    "Random": {
+      "accuracy": 0.549,
+      "avg_questions": 23.762,
+      "f1_score": 0.507103825136612,
+      "precision": 0.3396778916544656
+    }
+  },
+  "0.4": {
+    "Thompson": {
+      "accuracy": 0.743,
+      "avg_questions": 35.357,
+      "f1_score": 0.7082860385925085,
+      "precision": 0.5483304042179262
+    },
+    "HDoC": {
+      "accuracy": 0.904,
+      "avg_questions": 43.583,
+      "f1_score": 0.8260869565217391,
+      "precision": 0.991304347826087
+    },
+    "Random": {
+      "accuracy": 0.605,
+      "avg_questions": 23.372,
+      "f1_score": 0.6227316141356256,
+      "precision": 0.4521497919556172
+    }
+  },
+  "0.5": {
+    "Thompson": {
+      "accuracy": 0.699,
+      "avg_questions": 25.115,
+      "f1_score": 0.7489574645537949,
+      "precision": 0.5986666666666667
+    },
+    "HDoC": {
+      "accuracy": 0.912,
+      "avg_questions": 40.057,
+      "f1_score": 0.89,
+      "precision": 0.9807162534435262
+    },
+    "Random": {
+      "accuracy": 0.703,
+      "avg_questions": 23.232,
+      "f1_score": 0.7392449517120281,
+      "precision": 0.5863509749303621
+    }
+  },
+  "0.6": {
+    "Thompson": {
+      "accuracy": 0.774,
+      "avg_questions": 29.401,
+      "f1_score": 0.8328402366863905,
+      "precision": 0.7135614702154626
+    },
+    "HDoC": {
+      "accuracy": 0.925,
+      "avg_questions": 36.927,
+      "f1_score": 0.9332146037399822,
+      "precision": 0.9492753623188406
+    },
+    "Random": {
+      "accuracy": 0.578,
+      "avg_questions": 18.614,
+      "f1_score": 0.7212681638044914,
+      "precision": 0.5640495867768595
+    }
+  },
+  "0.7": {
+    "Thompson": {
+      "accuracy": 0.823,
+      "avg_questions": 28.922,
+      "f1_score": 0.8834759710335748,
+      "precision": 0.7912735849056604
+    },
+    "HDoC": {
+      "accuracy": 0.875,
+      "avg_questions": 29.497,
+      "f1_score": 0.9093546047860769,
+      "precision": 0.8612637362637363
+    },
+    "Random": {
+      "accuracy": 0.694,
+      "avg_questions": 18.699,
+      "f1_score": 0.8099378881987578,
+      "precision": 0.6805845511482255
+    }
+  },
+  "0.8": {
+    "Thompson": {
+      "accuracy": 0.815,
+      "avg_questions": 19.344,
+      "f1_score": 0.8950652297220647,
+      "precision": 0.8100616016427105
+    },
+    "HDoC": {
+      "accuracy": 0.929,
+      "avg_questions": 31.319,
+      "f1_score": 0.9554300062774639,
+      "precision": 0.9596469104665826
+    },
+    "Random": {
+      "accuracy": 0.779,
+      "avg_questions": 17,
+      "f1_score": 0.8757729061270377,
+      "precision": 0.779
+    }
+  },
+  "0.9": {
+    "Thompson": {
+      "accuracy": 0.91,
+      "avg_questions": 18.943,
+      "f1_score": 0.9519230769230769,
+      "precision": 0.908256880733945
+    },
+    "HDoC": {
+      "accuracy": 0.951,
+      "avg_questions": 27.747,
+      "f1_score": 0.9722379603399433,
+      "precision": 0.9850746268656716
+    },
+    "Random": {
+      "accuracy": 0.895,
+      "avg_questions": 17,
+      "f1_score": 0.9445910290237467,
+      "precision": 0.895
+    }
+  }
+}

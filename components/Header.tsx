@@ -46,17 +46,22 @@ export default function Header() {
   }
 
   return (
-    <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center">
-      <div className="flex items-center space-x-3">
+    <header className="bg-white shadow-md py-4 px-6 relative flex items-center" style={{minHeight: '64px'}}>
+      {/* Logo bên trái */}
+      <div className="flex items-center z-10">
         <img src="/img/vnuislogo-2.png" alt="VNU Logo" className="h-10" />
-        <Link 
-          href={getDashboardPath()} 
-          className="text-xl font-semibold text-[#0f2a4e] hover:text-blue-800 transition-colors duration-200"
+      </div>
+      {/* Chữ ở giữa tuyệt đối */}
+      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <Link
+          href={getDashboardPath()}
+          className="text-2xl font-oswald font-bold text-[#0f2a4e] hover:text-blue-800 transition-colors duration-200"
         >
-          Learning System
+          E-Learning System 
         </Link>
       </div>
-      <div className="flex items-center space-x-4">
+      {/* Nút logout bên phải */}
+      <div className="flex items-center space-x-4 ml-auto z-10">
         <span className="text-[#0f2a4e]">Welcome, {userName}</span>
         <button 
           onClick={handleLogout}
