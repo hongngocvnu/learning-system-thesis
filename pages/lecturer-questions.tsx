@@ -75,7 +75,7 @@ interface QuestionForm {
   difficulty: number
 }
 
-const genAI = new GoogleGenerativeAI("AIzaSyBBGFndzvMpWH8dCGbAsJAqCuKogSCeI8A")
+// const genAI = new GoogleGenerativeAI("AIzaSyBBGFndzvMpWH8dCGbAsJAqCuKogSCeI8A")
 
 // Add fetchQuestions function before the QuestionManager component
 const fetchQuestions = async (userId: string, loId: number) => {
